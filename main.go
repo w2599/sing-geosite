@@ -195,6 +195,7 @@ func release(source string, destination string, output string) error {
 	}
 	destinationRelease, err := fetch(destination)
 	if err != nil {
+
 		logrus.Warn("missing destination latest release")
 	} else {
 		if os.Getenv("NO_SKIP") != "true" && strings.Contains(*destinationRelease.Name, *sourceRelease.Name) {

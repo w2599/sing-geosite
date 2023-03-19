@@ -1,3 +1,4 @@
+
 name: Release
 on:
   workflow_dispatch:
@@ -28,6 +29,12 @@ jobs:
         if: steps.build.outputs.skip != 'true'
         run: |
           sha256sum geosite.db > geosite.db.sha256sum
+      - name: Extract number from tag with sed
+        id: get_time
+        run: |
+          tag_number=$(echo "${{ steps.build.outputs.tag }}" | sed 's/[^0-9]*//g')
+          echo "The tag number is ${tag_number}"
+          echo "tag_number=${tag_number}" >> $GITHUB_OUTPUT
       - name: Create a release
         if: steps.build.outputs.skip != 'true'
         id: create_release
@@ -35,8 +42,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.build.outputs.tag }}
-          release_name: ${{ steps.build.outputs.tag }}
+          tag_name: ${{ steps.get_time.outputs.tag_number }}
+          release_name: ${{ steps.get_time.outputs.tag_number }}
           draft: false
           prerelease: false
       - name: Release geosite.db

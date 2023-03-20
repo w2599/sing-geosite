@@ -9,61 +9,47 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: Get latest go version
-        id: version
+      - name: Compare latest tags and set variables
         run: |
-          go_version=$(curl -s https://raw.githubusercontent.com/actions/go-versions/main/versions-manifest.json | grep -oE '"version": "[0-9]{1}.[0-9]{1,}(.[0-9]{1,})?"' | head -1 | cut -d':' -f2 | sed 's/ //g; s/"//g')
-          echo "go_version=${go_version}" >> $GITHUB_OUTPUT
+          upstreamLatestTag=$(curl -sSL --connect-timeout 5 --retry 5 -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/Loyalsoldier/domain-list-custom/releases/latest | grep "tag_name" | cut -d\" -f4)
+          thisLatestTag=$(curl -sSL --connect-timeout 5 --retry 5 -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/releases/latest | grep "tag_name" | cut -d\" -f4)
+          if [[ $upstreamLatestTag != $thisLatestTag ]]; then
+            echo "NeedToSync=true" >> $GITHUB_ENV
+          fi
+          echo "RELEASE_NAME=$upstreamLatestTag" >> $GITHUB_ENV
+          echo "TAG_NAME=$upstreamLatestTag" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Checkout codebase
+        uses: actions/checkout@v3
+        if: ${{ env.NeedToSync }}
+
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
+        if: ${{ env.NeedToSync }}
         with:
-          go-version: ${{ steps.version.outputs.go_version }}
-      - name: Build geosite
-        id: build
+          go-version-file: ./go.mod
+
+      - name: Get dependencies and run
+        if: ${{ env.NeedToSync }}
         run: |
           go run -v .
+
       - name: Generate sha256 hash
         if: steps.build.outputs.skip != 'true'
         run: |
           sha256sum geosite.db > geosite.db.sha256sum
-      - name: Extract number from tag with sed
-        id: get_time
-        run: |
-          tag_number=$(echo "${{ steps.build.outputs.tag }}" | sed 's/[^0-9]*//g')
-          echo "The tag number is ${tag_number}"
-          echo "tag_number=${tag_number}" >> $GITHUB_OUTPUT
-      - name: Create a release
-        if: steps.build.outputs.skip != 'true'
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release and upload assets
+        if: ${{ env.NeedToSync }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.get_time.outputs.tag_number }}
-          release_name: ${{ steps.get_time.outputs.tag_number }}
+          name: ${{ env.RELEASE_NAME }}
+          tag_name: ${{ env.TAG_NAME }}
           draft: false
           prerelease: false
-      - name: Release geosite.db
-        if: steps.build.outputs.skip != 'true'
-        uses: actions/upload-release-asset@v1
+          files: |
+            ./geosite.db
+            ./geosite.db.sha256sum
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./geosite.db
-          asset_name: geosite.db
-          asset_content_type: application/octet-stream
-      - name: Release geosite.db sha256sum
-        if: steps.build.outputs.skip != 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./geosite.db.sha256sum
-          asset_name: geosite.db.sha256sum
-          asset_content_type: text/plain

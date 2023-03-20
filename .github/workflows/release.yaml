@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Compare latest tags and set variables
         run: |
-          upstreamLatestTag=$(curl -sSL --connect-timeout 5 --retry 5 -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/Loyalsoldier/domain-list-custom/releases/latest | grep "tag_name" | cut -d\" -f4)
+          upstreamLatestTag=$(curl -sSL --connect-timeout 5 --retry 5 -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/Loyalsoldier/domain-list-custom/releases/latest | grep "tag_name" | cut -d\" -f4 | cut -c 1-12)
           thisLatestTag=$(curl -sSL --connect-timeout 5 --retry 5 -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/releases/latest | grep "tag_name" | cut -d\" -f4)
           if [[ $upstreamLatestTag != $thisLatestTag ]]; then
             echo "NeedToSync=true" >> $GITHUB_ENV
@@ -33,7 +33,7 @@ jobs:
       - name: Get dependencies and run
         if: ${{ env.NeedToSync }}
         run: |
-          go run -v .
+          go run . -v 
 
       - name: Generate sha256 hash
         if: steps.build.outputs.skip != 'true'
